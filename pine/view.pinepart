@@ -509,7 +509,7 @@ if showOverlay and showMarkers and latestInView
     scenePlotLows.push(f_lower(f_lower(f_lower(visibleLower, visibleLine), f_lower(ribbonPrice, visibleUpper)), f_lower(f_lower(average, tenkan), f_lower(kijun, f_lower(spanA, spanB)))))
 
 bool frozenDefaults = fastLength == 2 and slowLength == 30 and atrBuffer == 0.5 and confirmation == 2 and wErLength == 10 and wEmaLength == 40 and wAtrLength == 14 and wKamaSlope == 2 and wEmaSlope == 4 and wWarmup == 52
-plot(assetFresh ? asset.line : na, "Three Towers Trend Line", display = display.data_window)
+plot(assetFresh ? asset.line : na, "Trend Line", display = display.data_window)
 plot(assetReady ? asset.regime : na, "TT Regime", display = display.data_window)
 plot(assetReady ? (asset.weakening ? 1 : 0) : na, "TT Weakening", display = display.data_window)
 plot(assetFresh ? asset.ema : na, "TT EMA", display = display.data_window)
@@ -1064,4 +1064,4 @@ if barstate.islast and actionBadges.size() > 0
 if weekly and barstate.isconfirmed and assetReady
     string eventName = bull and bullAlerts ? "BUY" : bear and bearAlerts ? "SELL" : warning and warningAlerts ? (bandExit ? "Warning · closed below the sell line, not a SELL" : "Warning · trend weakening, not a SELL") : ""
     if eventName != ""
-        alert("Three Towers | " + syminfo.tickerid + " | " + eventName + " | Weekly confirmed " + f_confirmation_time(asset.confirmedAt) + " UTC | Bitcoin: " + f_name(btc, btcFresh), alert.freq_once_per_bar_close)
+        alert("Trend Line | " + syminfo.tickerid + " | " + eventName + " | Weekly confirmed " + f_confirmation_time(asset.confirmedAt) + " UTC | Bitcoin: " + f_name(btc, btcFresh), alert.freq_once_per_bar_close)

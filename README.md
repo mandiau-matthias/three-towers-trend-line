@@ -1,9 +1,9 @@
-# Three Towers Trend Line
+# Trend Line
 ![A worked example showing a weekly dip and recovery](examples/warning.svg)
 
-[Open the editable Pine indicator](three_towers_trend_line.pine) · [Backtest strategy](three_towers_backtest.pine) · [Python reference model](research/model.py)
+[Open the editable Pine indicator](trend_line.pine) · [Backtest strategy](trend_line_backtest.pine) · [Python reference model](research/model.py)
 
-I built Three Towers to follow an established weekly trend. Gold means the model holds. Grey means it waits in cash. Open a standard candlestick chart in TradingView, copy the entire indicator into a new Pine Editor script and choose **Add to chart**. Use a 1W chart for the strategy.
+I built this indicator to follow an established weekly trend. Gold means the model holds. Grey means it waits in cash. Open a standard candlestick chart in TradingView, copy the entire indicator into a new Pine Editor script and choose **Add to chart**. Use a 1W chart for the strategy.
 
 ### A warning that never became a sell
 

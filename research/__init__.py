@@ -1,1 +1,1 @@
-"""Reproducible Three Towers reference engine and historical evaluation."""
+"""Reproducible weekly trend reference engine and historical evaluation."""
