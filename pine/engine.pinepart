@@ -1,0 +1,157 @@
+// Shared engine. Edit this source, then run python3 scripts/build_pine.py.
+// A snapshot is computed only in the WEEKLY source context. Views never change it.
+string adv = "Advanced weekly settings"
+int wErLength = input.int(10, "KAMA efficiency weeks", minval = 2, maxval = 104, group = adv, display = display.none)
+int fastLength = input.int(2, "KAMA fast length", minval = 1, maxval = 50, group = adv, display = display.none)
+int slowLength = input.int(30, "KAMA slow length", minval = 2, maxval = 200, group = adv, display = display.none)
+int wEmaLength = input.int(40, "Structure EMA weeks", minval = 2, maxval = 200, group = adv, display = display.none)
+int wAtrLength = input.int(14, "Wilder ATR weeks", minval = 2, maxval = 104, group = adv, display = display.none)
+float atrBuffer = input.float(0.5, "ATR buffer", minval = 0, maxval = 5, step = 0.1, group = adv, display = display.none)
+int wKamaSlope = input.int(2, "KAMA slope weeks", minval = 1, maxval = 52, group = adv, display = display.none)
+int wEmaSlope = input.int(4, "EMA slope weeks", minval = 1, maxval = 52, group = adv, display = display.none)
+int confirmation = input.int(2, "Consecutive qualifying bars", minval = 1, maxval = 8, group = adv, display = display.none)
+int wWarmup = input.int(52, "Minimum valid weeks", minval = 52, maxval = 520, group = adv, display = display.none)
+string exitRuleName = input.string("Below the trend band", "SELL rule", options = ["Below the trend band", "All three conditions (1.4 classic)"], tooltip = "Below the trend band is the 1.5 default. The model sells after two weekly closes in a row below the line minus its buffer, or the number of weeks you set. The first such week is the warning. All three conditions is the 1.4 rule. It also waited for a falling line and a falling 40 week average, so it sold later after a top. BUY rules are the same in both.", group = adv, display = display.none)
+bool bandExit = exitRuleName == "Below the trend band"
+string btcSymbol = input.symbol("BITSTAMP:BTCUSD", "BTC reference", group = "Market context", display = display.none)
+int WEEK_MS = 604800000
+
+type Towers
+    float line
+    float ema
+    float atr
+    int regime
+    bool weakening
+    bool ready
+    int confirmedAt
+    int lastFlipAt
+    int validBars
+    int bullVotes
+    int bearVotes
+    bool bullEvent
+    bool bearEvent
+    bool warnEvent
+    float flipPrice
+    int regimeBars
+    float price
+    int firstSourceAt
+
+f_engine() =>
+    var int firstSourceAt = time
+    int erLength = wErLength
+    int emaLength = wEmaLength
+    int atrLength = wAtrLength
+    int kamaSlope = wKamaSlope
+    int emaSlope = wEmaSlope
+    int warmup = wWarmup
+    int periodId = int(time / WEEK_MS)
+    var array<float> prices = array.new_float()
+    var array<float> lines = array.new_float()
+    var array<float> averages = array.new_float()
+    var array<int> stamps = array.new_int()
+    var float kama = na
+    var float ema = na
+    var float atr = na
+    var float trSeed = 0.0
+    var int validBars = 0
+    var int bullRun = 0
+    var int bearRun = 0
+    var int regime = 0
+    var bool weakening = false
+    var int lastFlip = na
+    var float flipPrice = na
+    var int regimeBars = 0
+    var int lastValidTime = na
+    bool valid = not na(open) and not na(high) and not na(low) and not na(close) and low > 0 and high >= math.max(open, close) and low <= math.min(open, close)
+    bool contiguous = not na(lastValidTime) and periodId - lastValidTime == 1
+    bool ready = false
+    bool bullEvent = false
+    bool bearEvent = false
+    bool warnEvent = false
+    int bullVotes = 0
+    int bearVotes = 0
+    if not valid or not contiguous
+        bullRun := 0
+        bearRun := 0
+    if valid
+        int sizeBefore = array.size(prices)
+        float previousClose = sizeBefore > 0 ? array.get(prices, sizeBefore - 1) : na
+        float tr = na(previousClose) ? high - low : math.max(high - low, math.max(math.abs(high - previousClose), math.abs(low - previousClose)))
+        validBars += 1
+        ema := na(ema) ? close : ema + 2.0 / (emaLength + 1.0) * (close - ema)
+        if validBars <= atrLength
+            trSeed += tr
+            if validBars == atrLength
+                atr := trSeed / atrLength
+        else
+            atr := atr + (tr - atr) / atrLength
+        array.push(prices, close)
+        array.push(stamps, periodId)
+        int n = array.size(prices)
+        bool erAvailable = n > erLength and periodId - array.get(stamps, n - erLength - 1) == erLength
+        if na(kama) and n >= erLength
+            float seed = 0.0
+            for i = n - erLength to n - 1
+                seed += array.get(prices, i)
+            kama := seed / erLength
+        else if not na(kama) and erAvailable
+            float movement = 0.0
+            for i = n - erLength to n - 1
+                movement += math.abs(array.get(prices, i) - array.get(prices, i - 1))
+            float efficiency = movement == 0 ? 0.0 : math.abs(close - array.get(prices, n - erLength - 1)) / movement
+            float slowFactor = 2.0 / (slowLength + 1.0)
+            float factor = math.pow(efficiency * (2.0 / (fastLength + 1.0) - slowFactor) + slowFactor, 2)
+            kama := kama + factor * (close - kama)
+        array.push(lines, kama)
+        array.push(averages, ema)
+        bool slopesAvailable = n > math.max(kamaSlope, emaSlope) and periodId - array.get(stamps, n - kamaSlope - 1) == kamaSlope and periodId - array.get(stamps, n - emaSlope - 1) == emaSlope
+        ready := validBars >= math.max(warmup, math.max(emaLength, atrLength)) and erAvailable and slopesAvailable and contiguous and not na(array.get(lines, n - kamaSlope - 1)) and not na(kama) and not na(atr)
+        if ready
+            float oldKama = array.get(lines, n - kamaSlope - 1)
+            float oldEma = array.get(averages, n - emaSlope - 1)
+            bullVotes := (close > kama + atrBuffer * atr ? 1 : 0) + (kama > oldKama ? 1 : 0) + (close > ema and ema > oldEma ? 1 : 0)
+            bearVotes := (close < kama - atrBuffer * atr ? 1 : 0) + (kama < oldKama ? 1 : 0) + (close < ema and ema < oldEma ? 1 : 0)
+            bool belowBand = close < kama - atrBuffer * atr
+            bool exitCondition = bandExit ? belowBand : bearVotes == 3
+            bullRun := bullVotes == 3 ? bullRun + 1 : 0
+            bearRun := exitCondition ? bearRun + 1 : 0
+            int previousRegime = regime
+            if bullRun >= confirmation
+                regime := 1
+            else if bearRun >= confirmation
+                regime := -1
+            bullEvent := regime == 1 and previousRegime != 1
+            bearEvent := regime == -1 and previousRegime != -1
+            if bullEvent or bearEvent
+                lastFlip := time_close
+                flipPrice := close
+                regimeBars := 0
+            if regime != 0
+                regimeBars += 1
+            // 1.5: the warning is the first week of the exit rule itself, so a warning
+            // that repeats on the next weekly close becomes the SELL.
+            bool nextWarning = regime == 1 and (bandExit ? belowBand : bearVotes >= 2)
+            warnEvent := nextWarning and not weakening
+            weakening := nextWarning
+        else
+            bullRun := 0
+            bearRun := 0
+        lastValidTime := periodId
+        int keep = math.max(erLength + 1, math.max(kamaSlope, emaSlope) + 1)
+        if array.size(prices) > keep
+            array.shift(prices)
+            array.shift(lines)
+            array.shift(averages)
+            array.shift(stamps)
+    // Unavailable samples retain internal regime/warning memory, but are gray and silent.
+    Towers.new(kama, ema, atr, regime, weakening, ready, time_close, lastFlip, validBars, bullVotes, bearVotes, bullEvent, bearEvent, warnEvent, flipPrice, regimeBars, close, firstSourceAt)
+
+f_previous() =>
+    Towers state = f_engine()
+    state[1]
+
+f_name(Towers state, bool fresh) =>
+    not fresh ? "Data unavailable" : not state.ready ? "Initializing / data gap" : state.regime == 1 ? "BULLISH" : state.regime == -1 ? "BEARISH" : "Awaiting confirmation"
+
+f_date(int stamp) =>
+    na(stamp) ? "Not available" : str.format_time(stamp, "yyyy-MM-dd HH:mm", "UTC")

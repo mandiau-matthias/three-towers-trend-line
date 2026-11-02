@@ -1,0 +1,201 @@
+// Daily opening records are independent of the viewing chart's bars.
+// No developing daily close, high or low participates in an execution example.
+int DAY_MS = 86400000
+int HISTORY_DAYS = 12000
+
+type DayRecord
+    Towers state
+    int at
+    float opening
+    bool validOpen
+
+f_day() =>
+    Towers confirmed = request.security(syminfo.tickerid, "1W", f_previous(), gaps = barmerge.gaps_off, lookahead = barmerge.lookahead_on)
+    DayRecord.new(confirmed, time, open, not na(open) and open > 0)
+
+// Used only when an irregular/tick view skips daily publications. Bounded recovery
+// cannot manufacture older data; a gap outside the buffer invalidates its examples.
+f_day_tail() =>
+    DayRecord item = f_day()
+    var array<DayRecord> history = array.new<DayRecord>()
+    history.push(item)
+    if history.size() > 800
+        history.shift()
+    barstate.islast ? history : na
+
+type TradeExample
+    int buyAt
+    int sellAt
+    float buyOpen
+    float sellOpen
+    float unitCost
+    float unitProceeds
+    float stagedFactor
+    int purchases
+    int trims
+    int nextBuyAt
+
+type ExampleBook
+    array<TradeExample> pairs
+    array<int> days
+    array<float> opens
+    array<int> gaps
+    float entry = na
+    int entryAt = na
+    int incomplete = 0
+    int losing = 0
+    int lastDay = na
+    int lastWeek = na
+    float stageCash = 1.0
+    float stageQty = 0.0
+    float stageTranche = na
+    bool stageFrozen = false
+    bool stageValid = true
+    int purchases = 0
+    int trims = 0
+    int gapCount = 0
+
+method discard(ExampleBook book) =>
+    if not na(book.entryAt)
+        book.incomplete += 1
+    book.entry := na
+    book.entryAt := na
+    book.stageValid := false
+
+method consume(ExampleBook book, DayRecord item) =>
+    if not na(item) and (na(book.lastDay) or item.at > book.lastDay)
+        bool dayGap = not na(book.lastDay) and item.at != book.lastDay + DAY_MS
+        if dayGap or not item.validOpen
+            book.gapCount += 1
+        book.days.push(item.at)
+        book.opens.push(item.validOpen ? item.opening : na)
+        book.gaps.push(book.gapCount)
+        if book.days.size() > HISTORY_DAYS
+            book.days.shift()
+            book.opens.shift()
+            book.gaps.shift()
+        Towers s = item.state
+        bool newWeek = not na(s) and (na(book.lastWeek) or s.confirmedAt > book.lastWeek)
+        if newWeek
+            bool skippedWeek = not na(book.lastWeek) and s.confirmedAt != book.lastWeek + WEEK_MS
+            if skippedWeek
+                book.discard()
+            bool boundary = item.at == s.confirmedAt
+            bool priced = boundary and item.validOpen
+            float cost = item.opening * (1 + exampleSlippage / 100) * 1.003
+            float proceeds = item.opening * (1 - exampleSlippage / 100) * 0.997
+            if not s.ready
+                book.discard()
+            if s.ready and s.bullEvent
+                if book.pairs.size() > 0
+                    TradeExample latestPair = book.pairs.last()
+                    latestPair.nextBuyAt := s.confirmedAt
+                book.discard()
+                book.entryAt := priced ? s.confirmedAt : na
+                book.entry := priced ? item.opening : na
+                book.stageCash := 1.0
+                book.stageQty := 0.0
+                book.stageTranche := na
+                book.stageFrozen := false
+                book.stageValid := priced
+                book.purchases := 0
+                book.trims := 0
+                if not priced
+                    book.incomplete += 1
+            if not na(book.entryAt) and s.ready
+                if not priced
+                    book.stageValid := false
+                // SELL has priority over every staging action.
+                if s.bearEvent
+                    if priced
+                        float unitCost = book.entry * (1 + exampleSlippage / 100) * 1.003
+                        float factor = book.stageValid ? book.stageCash + book.stageQty * proceeds : na
+                        book.pairs.push(TradeExample.new(book.entryAt, s.confirmedAt, book.entry, item.opening, unitCost, proceeds, factor, book.purchases, book.trims, na))
+                        if proceeds < unitCost
+                            book.losing += 1
+                        if book.pairs.size() > 300
+                            book.pairs.shift()
+                    else
+                        book.incomplete += 1
+                    book.entry := na
+                    book.entryAt := na
+                    book.stageCash += priced ? book.stageQty * proceeds : 0
+                    book.stageQty := 0
+                else if s.regime == 1 and book.stageValid
+                    if s.weakening
+                        if not book.stageFrozen
+                            book.stageFrozen := true
+                            book.stageTranche := book.stageQty * 0.1
+                        float amount = math.min(book.stageQty, nz(book.stageTranche))
+                        if amount > 0
+                            book.stageCash += amount * proceeds
+                            book.stageQty := math.max(0, book.stageQty - amount)
+                            book.trims += 1
+                    else if not book.stageFrozen and book.purchases < 10
+                        float budget = math.min(0.1, book.stageCash)
+                        book.stageQty += budget / cost
+                        book.stageCash := math.max(0, book.stageCash - budget)
+                        book.purchases += 1
+            book.lastWeek := s.confirmedAt
+        book.lastDay := item.at
+    book
+
+f_open_at(ExampleBook book, int at) =>
+    int i = book.days.binary_search_leftmost(at)
+    i >= 0 and i < book.days.size() and book.days.get(i) == at ? book.opens.get(i) : na
+
+f_delay(ExampleBook book, TradeExample pair, int buyDelay, int sellDelay) =>
+    float cost = na
+    float proceeds = na
+    if not na(pair)
+        int buyAt = pair.buyAt + buyDelay * DAY_MS
+        int sellAt = pair.sellAt + sellDelay * DAY_MS
+        int first = book.days.binary_search_leftmost(pair.buyAt)
+        int last = book.days.binary_search_leftmost(sellAt)
+        bool continuous = first >= 0 and last >= 0 and first < book.days.size() and last < book.days.size()
+        if continuous
+            continuous := book.days.get(first) == pair.buyAt and book.days.get(last) == sellAt and book.gaps.get(first) == book.gaps.get(last)
+        bool eligible = buyAt < pair.sellAt and sellAt > buyAt and (na(pair.nextBuyAt) or sellAt < pair.nextBuyAt)
+        if continuous and eligible
+            float buyOpen = f_open_at(book, buyAt)
+            float sellOpen = f_open_at(book, sellAt)
+            if not na(buyOpen) and not na(sellOpen)
+                cost := buyOpen * (1 + exampleSlippage / 100) * 1.003
+                proceeds := sellOpen * (1 - exampleSlippage / 100) * 0.997
+    [cost, proceeds]
+
+f_number(float value) =>
+    na(value) ? "None" : value != 0 and math.abs(value) < 0.000000000001 ? (value < 0 ? "−" : "+") + "<0.000000000001" : str.tostring(value, math.abs(value) < 1 ? "0.############" : "#,##0.00")
+
+f_percent(float value) =>
+    na(value) ? "Unavailable" : value != 0 and math.abs(value) < 0.1 ? (value < 0 ? "−" : "+") + "<0.1%" : (value > 0 ? "+" : value < 0 ? "−" : "") + str.tostring(math.abs(value), "0.0") + "%"
+
+f_trade_return(TradeExample pair) =>
+    na(pair) or na(pair.unitCost) or pair.unitCost <= 0 or na(pair.unitProceeds) ? na : 100 * (pair.unitProceeds / pair.unitCost - 1)
+
+// Display precision never changes the underlying confirmation timestamp.
+f_confirmation_time(int value) =>
+    na(value) ? "None" : str.format_time(value, "d MMM yyyy · HH:mm", "UTC")
+
+f_readable_date(int value) =>
+    // Match the platform's en-GB day-only dates, including its "Sept" spelling.
+    // Exact timestamps remain available in technical tooltips, alerts and data.
+    na(value) ? "Date unavailable" : str.replace(str.format_time(value, "d MMM yyyy", "UTC"), " Sep ", " Sept ")
+
+f_badge_date(int value) =>
+    f_readable_date(value)
+
+f_example_asset() =>
+    switch syminfo.prefix + ":" + syminfo.ticker
+        "PULSEX:HEXWPLS_F1F4EE.USD" => "pHEX"
+        "PULSEX:WPLSDAI_E56043.USD" => "WPLS"
+        "PULSEX:PLSXWPLS_1B45B9.USD" => "PLSX"
+        => syminfo.basecurrency != "" ? syminfo.basecurrency : "units"
+
+f_quantity() =>
+    str.tostring(exampleQuantity, "#,##0.########") + " " + f_example_asset()
+
+f_trade_tip(TradeExample pair) =>
+    string result = f_percent(f_trade_return(pair)) + " AFTER ESTIMATED COSTS\n\nBUY  " + f_readable_date(pair.buyAt) + "\nOpening price  " + f_number(pair.buyOpen) + " " + syminfo.currency + "\n\nSELL  " + f_readable_date(pair.sellAt) + "\nOpening price  " + f_number(pair.sellOpen) + " " + syminfo.currency
+    string basis = "\n\nHistorical simulation · loaded chart history\n0.3% fee + " + str.tostring(exampleSlippage, "0.0") + "% slippage per side.\nOpening prices exclude these estimated costs.\nThe adaptive line is not the traded price."
+    result + basis + "\n\nCalculate for an amount in Settings > Panel view\n> Trade calculator. All dates UTC.\nModel " + (bandExit ? "weekly-1.5.0" : "weekly-1.0.0") + " · build " + BUILD_ID + "\nReconstructed from this feed, not a live publication log."

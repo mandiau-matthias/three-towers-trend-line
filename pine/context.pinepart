@@ -1,0 +1,32 @@
+type Context
+    float average
+    float tenkan
+    float kijun
+    float cloudA
+    float cloudB
+    float price
+    int confirmedAt
+
+f_context() =>
+    // Require full consecutive UTC crypto days, including the displaced cloud history.
+    bool validDay = not na(open) and not na(close) and not na(high) and not na(low) and low > 0 and high >= math.max(open, close) and low <= math.min(open, close)
+    float validCount = ta.cum(validDay ? 1.0 : 0.0)
+    bool full9 = time - time[8] == 8 * 86400000 and validCount - nz(validCount[9]) == 9
+    bool full26 = time - time[25] == 25 * 86400000 and validCount - nz(validCount[26]) == 26
+    bool full52 = time - time[51] == 51 * 86400000 and validCount - nz(validCount[52]) == 52
+    bool full77 = time - time[76] == 76 * 86400000 and validCount - nz(validCount[77]) == 77
+    bool full200 = time - time[199] == 199 * 86400000 and validCount - nz(validCount[200]) == 200
+    float tenkanRaw = math.avg(ta.highest(high, 9), ta.lowest(low, 9))
+    float kijunRaw = math.avg(ta.highest(high, 26), ta.lowest(low, 26))
+    float tenkan = full9 ? tenkanRaw : na
+    float kijun = full26 ? kijunRaw : na
+    float spanA = math.avg(tenkan, kijun)
+    float spanBRaw = math.avg(ta.highest(high, 52), ta.lowest(low, 52))
+    float spanB = full52 ? spanBRaw : na
+    float average = ta.sma(close, 200)
+    // TradingView's standard displacement 26 uses plot offset 26 - 1.
+    Context.new(full200 ? average : na, tenkan, kijun, full77 ? spanA[25] : na, full77 ? spanB[25] : na, close, time_close)
+
+f_previous_context() =>
+    Context state = f_context()
+    state[1]
