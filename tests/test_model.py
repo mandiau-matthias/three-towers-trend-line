@@ -126,12 +126,22 @@ class ModelTests(unittest.TestCase):
     def test_trade_fills_use_next_open_and_costs(self):
         b=[Bar(START,100,101,99,100),Bar(START+WEEK,120,125,115,120),Bar(START+2*WEEK,90,95,85,90)]
         sig=[Signal(START+WEEK,True,1,True,False),Signal(START+2*WEEK,True,-1,False,True),Signal(START+3*WEEK,True,-1,False,False)]
-        m,t,c=simulate(b,sig,START,START+3*WEEK,fee=.003,slippage=.005,enter_existing=False)
-        self.assertEqual(t[0]['entry_time'],b[1].time)
-        self.assertAlmostEqual(t[0]['entry_price'],120*1.005)
-        self.assertAlmostEqual(t[0]['exit_price'],90*.995)
-        self.assertEqual(m['losing_trades_within_8_weeks'],1)
-        self.assertEqual(c[0]['quantity'],0)
+        for fee, slip, entry, exit_price in [
+            (0, 0, 120, 90),
+            (.003, 0, 120, 90),
+            (.003, .005, 120.60, 89.55),
+        ]:
+            with self.subTest(fee=fee, slippage=slip):
+                metrics, trades, curve = simulate(b, sig, START, START+3*WEEK,
+                                                  fee=fee, slippage=slip, enter_existing=False)
+                trade, = trades
+                self.assertEqual((trade['entry_time'], trade['exit_time']), (b[1].time, b[2].time))
+                self.assertAlmostEqual(trade['entry_price'], entry)
+                self.assertAlmostEqual(trade['exit_price'], exit_price)
+                net_return = 100 * (exit_price * (1 - fee) / (entry * (1 + fee)) - 1)
+                self.assertAlmostEqual(trade['net_return_pct'], net_return)
+                self.assertEqual(metrics['losing_trades_within_8_weeks'], 1)
+                self.assertEqual(curve[0]['quantity'], 0)
 
 
 if __name__ == '__main__':

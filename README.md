@@ -9,10 +9,10 @@ I built this indicator to follow an established weekly trend. Gold means the mod
 
 The chart uses invented prices. On the same candles, the reference backtest opened one long position on 9 January 2023. Here is what happened to it around the warning.
 
-| Weekly close (UTC) | Closing price | Indicator | Backtest position |
-|---|---:|---|---|
-| 11 December 2023 | 1,492.71 | First close below the sell line. Warning active. | Still holding |
-| 18 December 2023 | 1,959.18 | Price recovered. Warning cleared. | Still holding |
+| Weekly close (UTC) | Closing price | Sell line | Indicator | Backtest position |
+|---|---:|---:|---|---|
+| 11 December 2023 | 1,492.71 | 1,758.09 | First close below the sell line. Warning active. | Still holding |
+| 18 December 2023 | 1,959.18 | 1,758.32 | Price recovered. Warning cleared. | Still holding |
 
 There was no sell order on either date. The example runs the signal engine and the next-open backtest on the same history, using 99% exposure, 0.3% fees per side and zero slippage, as in the Pine strategy defaults. Rebuild the chart and print both readings:
 
@@ -24,6 +24,18 @@ python3 -m unittest discover -s tests
 ### How a signal reaches the chart
 
 The model waits for the weekly close. A sell needs confirmation across two qualifying closes. Intraday movement and the distance to the line are context. Match the feed, timeframe, chart type, and loaded history when comparing results. The strategy defaults to 10,000 initial capital, 99% exposure, 0.3% commission per side and zero strategy slippage. Set realistic slippage ticks in Strategy Properties. The on-chart trade calculator has its own percentage slippage assumption.
+
+### How trading costs change a backtest
+
+Take a separate fictional trade with a next-open entry at 120 and exit at 90. The signals and bar dates are identical in all three runs. Return is measured on the trade, including commission on both fills.
+
+| Commission per side | Slippage per side | Entry fill | Exit fill | Net trade return |
+|---|---:|---:|---:|---:|
+| 0% | 0% | 120.00 | 90.00 | −25.00% |
+| 0.3% | 0% | 120.00 | 90.00 | −25.45% |
+| 0.3% | 0.5% | 120.60 | 89.55 | −26.19% |
+
+The last row uses the Python simulator’s percentage slippage. TradingView’s **Strategy Properties → Slippage** takes a whole number of price ticks. A tick shifts the fill by the instrument’s minimum price increment, so a fixed tick setting generally won’t reproduce the same percentage at entry and exit. [Executable trade example](tests/test_model.py) · [TradingView’s slippage documentation](https://www.tradingview.com/pine-script-docs/concepts/strategies/#slippage-and-unfilled-limits)
 
 ### Compare your TradingView chart with the reference model
 
