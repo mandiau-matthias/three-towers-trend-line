@@ -7,7 +7,14 @@ I built this indicator to follow an established weekly trend. Gold means the mod
 
 ### A warning that never became a sell
 
-In the synthetic example above, the observation confirmed on 11 December 2023 closed at 1,492.71 and triggered a warning. The model still held. The next weekly observation closed at 1,959.18, the warning cleared, and there was no sell. The example uses invented prices and the same Python model as the tests. Run it yourself:
+The chart uses invented prices. On the same candles, the reference backtest opened one long position on 9 January 2023. Here is what happened to it around the warning.
+
+| Weekly close (UTC) | Closing price | Indicator | Backtest position |
+|---|---:|---|---|
+| 11 December 2023 | 1,492.71 | First close below the sell line. Warning active. | Still holding |
+| 18 December 2023 | 1,959.18 | Price recovered. Warning cleared. | Still holding |
+
+There was no sell order on either date. The example runs the signal engine and the next-open backtest on the same history, using 99% exposure, 0.3% fees per side and zero slippage, as in the Pine strategy defaults. Rebuild the chart and print both readings:
 
 ```sh
 python3 scripts/warning_example.py
