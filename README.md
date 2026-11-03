@@ -18,8 +18,18 @@ python3 -m unittest discover -s tests
 
 The model waits for the weekly close. A sell needs confirmation across two qualifying closes. Intraday movement and the distance to the line are context. Match the feed, timeframe, chart type, and loaded history when comparing results. The strategy defaults to 10,000 initial capital, 99% exposure, 0.3% commission per side and zero strategy slippage. Set realistic slippage ticks in Strategy Properties. The on-chart trade calculator has its own percentage slippage assumption.
 
+### Compare your TradingView chart with the reference model
+
+Use standard 1W candles with the default Trend Line settings. If your account supports chart-data export, load the full available history for the same feed and export a CSV with the **indicator or strategy** and its diagnostic plots. Export one script at a time. From this repository run:
+
+```sh
+python3 scripts/check_tradingview_export.py chart.csv --as-of 2026-11-02T00:00:00Z
+```
+
+Replace the cutoff with the last weekly close you want to check. The command uses the OHLC prices in your file and checks each completed bar's trend line, regime, warning, signal and confirmation time. It exits successfully on agreement. A mismatch prints the affected bar, field and both values. A cropped history, missing plots, or custom model settings cannot validate the default build. Keep the CSV on your own computer; the checker runs offline. If you chose the classic exit rule, pass `--model weekly-1.0.0`.
+
 ### Rebuild and contribute
 
 Edit the shared files in `pine/`, run `python3 scripts/build_pine.py`, and commit both generated Pine files. A good first contribution is a synthetic sequence that exposes a case where the Pine and Python outputs disagree. Include the feed and observation time when reporting a chart discrepancy.
 
-The source is candidate **1.6.6** and uses the weekly 1.5.0 model. On 2 November 2026, TradingView’s Pine Editor compiled both the indicator and the strategy from source commit `42d9e8b` on a weekly BITSTAMP:BTCUSD chart. The account’s chart limit prevented a visual comparison of this candidate with the reference signals. That check is still required for the Community Script release. The Python suite covers 24 reference and backtest cases. MIT covers the original code. Supply your own instrument history if extending the example to real data.
+The source is candidate **1.6.6** and uses the weekly 1.5.0 model. On 2 November 2026, TradingView’s Pine Editor compiled both the indicator and the strategy from source commit `42d9e8b` on a weekly BITSTAMP:BTCUSD chart. The account’s chart limit prevented a visual comparison of this candidate with the reference signals. That check is still required for the Community Script release. Run the Python suite above to check the reference model, backtest, and export comparison. MIT covers the original code. Supply your own instrument history if extending the example to real data.
