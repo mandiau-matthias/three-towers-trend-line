@@ -1,9 +1,9 @@
 # Trend Line
 ![A worked example showing a weekly dip and recovery](examples/warning.svg)
 
-[Open the editable Pine indicator](trend_line.pine) · [Backtest strategy](trend_line_backtest.pine) · [Python reference model](research/model.py)
+[Download the Pine indicator and backtest](https://github.com/mandiau-matthias/trend-line/releases/tag/v1.6.6) · [Read the indicator](trend_line.pine) · [Read the strategy](trend_line_backtest.pine) · [Python reference model](research/model.py)
 
-I built this indicator to follow an established weekly trend. Gold means the model holds. Grey means it waits in cash. Open a standard candlestick chart in TradingView, copy the entire indicator into a new Pine Editor script and choose **Add to chart**. Use a 1W chart for the strategy.
+I built this indicator to follow an established weekly trend. Gold means the model holds. Grey means it waits in cash. Download `trend_line.pine` from the GitHub release and open it in a text editor. On a standard weekly candlestick chart in TradingView, paste the whole file into a new Pine Editor script and choose **Add to chart**. To run the backtest, repeat with `trend_line_backtest.pine` in a separate script on the same 1W chart.
 
 ### A warning that never became a sell
 
