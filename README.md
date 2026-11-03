@@ -28,8 +28,16 @@ python3 scripts/check_tradingview_export.py chart.csv --as-of 2026-11-02T00:00:0
 
 Replace the cutoff with the last weekly close you want to check. The command uses the OHLC prices in your file and checks each completed bar's trend line, regime, warning, signal and confirmation time. It exits successfully on agreement. A mismatch prints the affected bar, field and both values. A cropped history, missing plots, or custom model settings cannot validate the default build. Keep the CSV on your own computer; the checker runs offline. If you chose the classic exit rule, pass `--model weekly-1.0.0`.
 
+You can also check the signals entirely inside TradingView. In a temporary copy of either Pine script, append [the independent weekly check](tests/native_weekly_reference.pinepart), then add that copy to a standard 1W chart with default inputs. The table compares the production calculations with a separate implementation on the same candles. It reports how many completed bars it checked, any differences, and any input it couldn't verify. Use the original script without the check for normal charting.
+
+### TradingView verification
+
+On 3 November 2026, both the 1.6.6 indicator and its companion strategy ran on TradingView's standard BITSTAMP:BTCUSD weekly candles. Each matched the independent check on **794 completed weeks** through the close on 2 November, including **25 trend changes and 19 warning starts**. Both runs had zero calculation or event differences and zero unsupported samples. The still-open week was excluded.
+
+For example, the indicator marked a BUY on 12 May 2025 and a SELL on 17 November 2025. The same dates appeared in the strategy's trade list. On this continuous market, the next weekly bar opens when the preceding bar closes. The check covers the historical weekly signals on this feed. Live alert delivery and trade execution were outside its scope.
+
 ### Rebuild and contribute
 
 Edit the shared files in `pine/`, run `python3 scripts/build_pine.py`, and commit both generated Pine files. A good first contribution is a synthetic sequence that exposes a case where the Pine and Python outputs disagree. Include the feed and observation time when reporting a chart discrepancy.
 
-The source is candidate **1.6.6** and uses the weekly 1.5.0 model. On 2 November 2026, TradingView’s Pine Editor compiled both the indicator and the strategy from source commit `42d9e8b` on a weekly BITSTAMP:BTCUSD chart. The account’s chart limit prevented a visual comparison of this candidate with the reference signals. That check is still required for the Community Script release. Run the Python suite above to check the reference model, backtest, and export comparison. MIT covers the original code. Supply your own instrument history if extending the example to real data.
+Version **1.6.6** uses the weekly 1.5.0 model. Run the Python suite above to check the reference model, backtest, and export comparison. MIT covers the original code. Supply your own instrument history if extending the example to real data.
